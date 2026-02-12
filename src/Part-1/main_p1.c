@@ -4,7 +4,7 @@
 // Project number: 1
 // Project description:
 // Team #: 4
-// Team members: Eric Santana
+// Team members: Eric Santana; Dante Jimenez; Alexander Zepeda; Kour, Thaisinge
 //=================================================================
 #include "../tm4c123gh6pm.h"
 #include "../Common/gpio_btn.h"
@@ -14,11 +14,14 @@
 #include "../Common/PLL.h"
 
 
+
 // function prototypes
 void System_Init(void);
 void PianoMode(void);
 void AutoPlayMode(void);
-
+void Beep(void);
+void Song_Test(void);
+void Delay(uint32_t ms);
 //globals
 volatile uint8_t keyPressed = 0;
 
@@ -37,15 +40,62 @@ typedef enum{
 
 //Start in Low octave
 State currentState = Low_Octave;
-
 //Starting mode piano mode
 Mode currentMode = Mode1;
+
+//Tone tab
+const uint32_t Tone_Tab[] =
+{LOW_C,LOW_D,LOW_E,LOW_F,LOW_G,LOW_A,LOW_B,
+ MID_C,MID_D,MID_E,MID_F,MID_G,MID_A,MID_B,
+ HIGH_C,HIGH_D,HIGH_E,HIGH_F,HIGH_G,HIGH_A,HIGH_B};
+
+
+#define PAUSE 255
+ 
+typedef struct Note {
+  uint8_t tone_index;
+  uint32_t delay;
+}Note;
+
+typedef const struct Note NTyp;
+
+// indices into Tone_Tab
+#define LC 0
+#define LD 1
+#define LE 2
+#define LF 3
+#define LG 4
+#define LA 5
+#define LB 6
+#define MC 7
+#define MD 8
+#define ME 9
+#define MF 10
+#define MG 11
+#define MA 12
+#define MB 13
+#define HC 14
+#define HD 15
+#define HE 16
+#define HF 17
+#define HG 18
+#define HA 19
+#define HB 20
+
+NTyp Song_HappyBirthday_ms[] = {
+  {LC,50},{LC,50},{LD,100},{LC,100},{LF,100},{LE,200},
+  {LC,50},{LC,50},{LD,100},{LC,100},{LG,100},{LF,200},
+  {LC,50},{LC,50},{MC,100},{LA,100},{LF,100},{LE,100},{LD,200},
+  {LB,50},{LB,50},{LA,100},{LF,100},{LG,100},{LF,300},
+  {0,0}
+};
+
 
 
 int main(void){	
   System_Init();
 
-	
+
   while(1){
 	
 		switch(currentMode){
@@ -58,7 +108,7 @@ int main(void){
   }
 }
 
-//Mode1
+//Mode 1
 void PianoMode(void){
   static uint8_t last = 0;   // static so it persists across calls
   uint8_t k = keyPressed;
@@ -106,9 +156,39 @@ void PianoMode(void){
   }
 }
 
-void AutoPlayMode(){
-	
+void AutoPlayMode(void){
+  static uint32_t i = 0;   // note index persists across calls
+
+  // If you ever want it to restart when you enter Mode2:
+  // (optional) you can detect mode changes with another static var.
+  // For now: it just keeps looping forever.
+
+  // End of song -> restart
+  if(Song_HappyBirthday_ms[i].delay == 0){
+    i = 0;
+    Sound_Stop();
+    Delay(300);
+    return;
+  }
+
+  // Play current note
+  if(Song_HappyBirthday_ms[i].tone_index == PAUSE){
+    Sound_Stop();
+  } else {
+    Sound_Start(Tone_Tab[Song_HappyBirthday_ms[i].tone_index]);
+  }
+
+  // Hold note for its duration (ms)
+  Delay(Song_HappyBirthday_ms[i].delay);
+
+  // Small gap between notes
+  Sound_Stop();
+  Delay(20);
+
+  // Next note
+  i++;
 }
+
 
 void System_Init(void) {
 	gpio_btn_init();
@@ -200,5 +280,39 @@ void GPIOPortF_Handler(){
 	}
 
 }
+
+// Busy-wait delay for 50 MHz system clock
+void Delay(uint32_t ms){
+    volatile unsigned long time;
+    
+    while(ms){
+        time = 16667;   // ˜ 1ms at 50 MHz
+        while(time){
+            time--;
+        }
+        ms--;
+    }
+}
+
+void Beep(){
+
+
+	Sound_Start(LOW_A);
+	Delay(300);
+	Sound_Stop();
+	Delay(300);
+	Sound_Start(LOW_B);
+	Delay(300);
+		Sound_Stop();
+	Sound_Start(LOW_G);
+	Delay(300);
+		Sound_Stop();
+	Sound_Stop();
+	Delay(300);
+
+}
+
+
+
 
 
