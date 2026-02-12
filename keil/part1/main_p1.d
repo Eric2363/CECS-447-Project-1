@@ -6,4 +6,5 @@
   ..\..\src\Part-1\..\Common\PianoKeys.h \
   ..\..\src\Part-1\..\Common\Dac.h \
   C:\Keil_v5\ARM\ARMCLANG\include\stdint.h \
-  ..\..\src\Part-1\..\Common\PLL.h
+  ..\..\src\Part-1\..\Common\PLL.h \
+  ..\..\src\Part-1\..\Common\DelayTimer.h

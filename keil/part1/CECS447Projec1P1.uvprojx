@@ -450,6 +450,16 @@
               <FileType>1</FileType>
               <FilePath>..\..\src\Part-1\main_p1.c</FilePath>
             </File>
+            <File>
+              <FileName>DelayTimer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\src\Common\DelayTimer.c</FilePath>
+            </File>
+            <File>
+              <FileName>DelayTimer.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\src\Common\DelayTimer.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

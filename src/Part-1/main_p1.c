@@ -12,6 +12,7 @@
 #include "../Common/PianoKeys.h"
 #include "../Common/Dac.h"
 #include "../Common/PLL.h"
+#include "../Common/DelayTimer.h"
 
 
 
@@ -21,9 +22,12 @@ void PianoMode(void);
 void AutoPlayMode(void);
 void Beep(void);
 void Song_Test(void);
-void Delay(uint32_t ms);
+
+//void Delay(uint32_t ms);
 //globals
 volatile uint8_t keyPressed = 0;
+volatile uint8_t currentSong = 0; 
+volatile uint16_t songIndex = 0;
 
 typedef enum{
 
@@ -43,21 +47,27 @@ State currentState = Low_Octave;
 //Starting mode piano mode
 Mode currentMode = Mode1;
 
+//Songs
+//========================================================
 //Tone tab
 const uint32_t Tone_Tab[] =
 {LOW_C,LOW_D,LOW_E,LOW_F,LOW_G,LOW_A,LOW_B,
  MID_C,MID_D,MID_E,MID_F,MID_G,MID_A,MID_B,
  HIGH_C,HIGH_D,HIGH_E,HIGH_F,HIGH_G,HIGH_A,HIGH_B};
 
-
-#define PAUSE 255
- 
+ //Notes
 typedef struct Note {
   uint8_t tone_index;
   uint32_t delay;
 }Note;
 
+
 typedef const struct Note NTyp;
+void play_a_song(const NTyp scoretab[]);
+
+
+//TEMPO
+#define UNIT_MS 80 // 1 duration is 100ms
 
 // indices into Tone_Tab
 #define LC 0
@@ -82,13 +92,80 @@ typedef const struct Note NTyp;
 #define HA 19
 #define HB 20
 
-NTyp Song_HappyBirthday_ms[] = {
-  {LC,50},{LC,50},{LD,100},{LC,100},{LF,100},{LE,200},
-  {LC,50},{LC,50},{LD,100},{LC,100},{LG,100},{LF,200},
-  {LC,50},{LC,50},{MC,100},{LA,100},{LF,100},{LE,100},{LD,200},
-  {LB,50},{LB,50},{LA,100},{LF,100},{LG,100},{LF,300},
+#define PAUSE_IDX 255
+
+
+#define SONG_COUNT 4
+#define SONG_MAX_NOTES 255
+
+
+
+NTyp mysong[SONG_COUNT][SONG_MAX_NOTES] = {
+  // Song 0: Mary Had a Little Lamb
+  {
+    // | E D C D | E E E - |
+    {LE,4}, {LD,4}, {LC,4}, {LD,4}, {LE,4}, {PAUSE_IDX,1}, {LE,4}, {PAUSE_IDX,1}, {LE,8},
+    // | D D D - | E G G - |
+    {LD,4}, {PAUSE_IDX,1}, {LD,4}, {PAUSE_IDX,1}, {LD,8}, {LE,4}, {LG,4}, {PAUSE_IDX,1}, {LG,8},
+    // | E D C D | E E E - |
+    {LE,4}, {LD,4}, {LC,4}, {LD,4}, {LE,4}, {PAUSE_IDX,1}, {LE,4}, {PAUSE_IDX,1}, {LE,8},
+    // | D D E D C - |
+    {LD,4}, {PAUSE_IDX,1}, {LD,4}, {LE,4}, {LD,4}, {LC,8},
+    {0,0}
+  },
+
+  // Song 1: Twinkle Twinkle Little Star
+  {
+    // | C C G G | A A G - | F F E E | D D C - |
+    {LC,3}, {PAUSE_IDX,1}, {LC,3}, {PAUSE_IDX,1}, {LG,3}, {PAUSE_IDX,1}, {LG,3}, {PAUSE_IDX,1}, 
+    {LA,3}, {PAUSE_IDX,1}, {LA,3}, {PAUSE_IDX,1}, {LG,8},
+    {LF,3}, {PAUSE_IDX,1}, {LF,3}, {PAUSE_IDX,1}, {LE,3}, {PAUSE_IDX,1}, {LE,3}, {PAUSE_IDX,1}, 
+    {LD,3}, {PAUSE_IDX,1}, {LD,3}, {PAUSE_IDX,1}, {LC,8},
+    // | G G F F | E E D - | G G F F | E E D - |
+    {LG,3}, {PAUSE_IDX,1}, {LG,3}, {PAUSE_IDX,1}, {LF,3}, {PAUSE_IDX,1}, {LF,3}, {PAUSE_IDX,1}, 
+    {LE,3}, {PAUSE_IDX,1}, {LE,3}, {PAUSE_IDX,1}, {LD,8},
+    {LG,3}, {PAUSE_IDX,1}, {LG,3}, {PAUSE_IDX,1}, {LF,3}, {PAUSE_IDX,1}, {LF,3}, {PAUSE_IDX,1}, 
+    {LE,3}, {PAUSE_IDX,1}, {LE,3}, {PAUSE_IDX,1}, {LD,8},
+    // | C C G G | A A G - | F F E E | D D C - |
+    {LC,3}, {PAUSE_IDX,1}, {LC,3}, {PAUSE_IDX,1}, {LG,3}, {PAUSE_IDX,1}, {LG,3}, {PAUSE_IDX,1}, 
+    {LA,3}, {PAUSE_IDX,1}, {LA,3}, {PAUSE_IDX,1}, {LG,8},
+    {LF,3}, {PAUSE_IDX,1}, {LF,3}, {PAUSE_IDX,1}, {LE,3}, {PAUSE_IDX,1}, {LE,3}, {PAUSE_IDX,1}, 
+    {LD,3}, {PAUSE_IDX,1}, {LD,3}, {PAUSE_IDX,1}, {LC,8},
+    {0,0}
+  },
+
+  // Song 2: Happy Birthday
+  {
+    // | C C | D C F | E C C | D C G | F C C |
+    {MC,2}, {PAUSE_IDX,1}, {MC,1}, {PAUSE_IDX,1}, {MD,4}, {MC,4}, {MF,4}, {ME,8}, 
+    {MC,2}, {PAUSE_IDX,1}, {MC,1}, {PAUSE_IDX,1}, {MD,4}, {MC,4}, {MG,4}, {MF,8},
+    {MC,2}, {PAUSE_IDX,1}, {MC,1}, {PAUSE_IDX,1},
+    // | C' A F | E D B B | A F G | F |
+    {HC,4}, {MA,4}, {MF,4}, {ME,4}, {MD,4}, 
+    {MB,2}, {PAUSE_IDX,1}, {MB,1}, {PAUSE_IDX,1}, {MA,4}, {MF,4}, {MG,4}, {MF,12},
+    {0,0}
+  },
+
+// Song 5: Pac-Man Intro (High Precision)
+{
+  {HB,2}, {PAUSE_IDX,1}, {HB,2}, {PAUSE_IDX,1}, {HF,2}, {PAUSE_IDX,1}, {HD,2}, {PAUSE_IDX,1},
+  {HB,2}, {PAUSE_IDX,1}, {HF,4}, {PAUSE_IDX,1}, {HD,8}, {PAUSE_IDX,2},
+  
+  {HC,2}, {PAUSE_IDX,1}, {HC,2}, {PAUSE_IDX,1}, {HG,2}, {PAUSE_IDX,1}, {HE,2}, {PAUSE_IDX,1},
+  {HC,2}, {PAUSE_IDX,1}, {HG,4}, {PAUSE_IDX,1}, {HE,8}, {PAUSE_IDX,2},
+  
+  {HB,2}, {PAUSE_IDX,1}, {HB,2}, {PAUSE_IDX,1}, {HF,2}, {PAUSE_IDX,1}, {HD,2}, {PAUSE_IDX,1},
+  {HB,2}, {PAUSE_IDX,1}, {HF,4}, {PAUSE_IDX,1}, {HD,8}, {PAUSE_IDX,2},
+  
+  {HD,2}, {HE,2}, {HF,2}, {PAUSE_IDX,1}, {HF,2}, {HG,2}, {HA,2}, {PAUSE_IDX,1},
+  {HA,2}, {HB,2}, {HC,2}, {PAUSE_IDX,1},{PAUSE_IDX,1},{PAUSE_IDX,1},
+  
   {0,0}
+}
+	
 };
+
+
 
 
 
@@ -96,6 +173,7 @@ int main(void){
   System_Init();
 
 
+	
   while(1){
 	
 		switch(currentMode){
@@ -157,37 +235,42 @@ void PianoMode(void){
 }
 
 void AutoPlayMode(void){
-  static uint32_t i = 0;   // note index persists across calls
-
-  // If you ever want it to restart when you enter Mode2:
-  // (optional) you can detect mode changes with another static var.
-  // For now: it just keeps looping forever.
-
-  // End of song -> restart
-  if(Song_HappyBirthday_ms[i].delay == 0){
-    i = 0;
+  // 1. Check if we are at the end
+  if(mysong[currentSong][songIndex].delay == 0){
+    songIndex = 0;
     Sound_Stop();
-    Delay(300);
+    DelayMs(300);
     return;
   }
 
-  // Play current note
-  if(Song_HappyBirthday_ms[i].tone_index == PAUSE){
+  // 2. Index Guard: Capture index before the delay
+  uint16_t indexAtStart = songIndex;
+
+  // 3. Capture current note info
+  uint8_t t = mysong[currentSong][songIndex].tone_index;
+  uint32_t d = mysong[currentSong][songIndex].delay;
+
+  // 4. Play the sound
+  if(t == PAUSE_IDX){
     Sound_Stop();
   } else {
-    Sound_Start(Tone_Tab[Song_HappyBirthday_ms[i].tone_index]);
+    uint8_t degree = t % 7;
+    uint8_t base = (currentState == Low_Octave) ? 0 : (currentState == Middle_Octave ? 7 : 14);
+    Sound_Start(Tone_Tab[base + degree]);
   }
 
-  // Hold note for its duration (ms)
-  Delay(Song_HappyBirthday_ms[i].delay);
-
-  // Small gap between notes
+  // 5. Delay
+  DelayMs(d * UNIT_MS);
   Sound_Stop();
-  Delay(20);
+  DelayMs(20);
 
-  // Next note
-  i++;
+  // 6. Only increment if the interrupt didn't reset songIndex to 0
+  if(songIndex == indexAtStart){
+    songIndex++;
+  }
 }
+
+
 
 
 void System_Init(void) {
@@ -197,7 +280,7 @@ void System_Init(void) {
   PianoKeys_Init();
 	DAC_Init();
 	Sound_Init();
-	
+	DelayTimer_Init();
 }
 
 //Description: Responsible for handling piano key input
@@ -239,78 +322,68 @@ void GPIOPortE_Handler(){
 
 //Description: Responsible for switches to change modes
 void GPIOPortF_Handler(){
-	
-	//SW1 piano toggle/ autoplay
-	if(GPIO_PORTF_MIS_R & SW1){
-	
-		GPIO_PORTF_ICR_R = SW1; // Clear interupt flag for SW1
-		
-		GPIO_PORTF_DATA_R &=~LEDS; // Clear previous LEDS
-		
-		GPIO_PORTF_DATA_R |= BLUE; // set new LED
-		
-		if(currentMode == Mode1){
-			currentMode = Mode2;
-		}
-		else{
-			currentMode = Mode1;
-		}
-	
-	}
-	//SW2 Octave change / song change
-	if(GPIO_PORTF_MIS_R & SW2){
-		
-		GPIO_PORTF_ICR_R = SW2; // Clear interupt flag for SW2
-		
-		GPIO_PORTF_DATA_R &=~LEDS; // Clear previous LEDS
-		GPIO_PORTF_DATA_R |= RED; // set new LED
-		
-
-		
-		if(currentState == Low_Octave){
-			currentState = Middle_Octave;
-		}
-		else if(currentState == Middle_Octave){
-			currentState = High_Octave;
-		}
-		else{
-			currentState = Low_Octave;
-		}
-		
-	}
-
-}
-
-// Busy-wait delay for 50 MHz system clock
-void Delay(uint32_t ms){
-    volatile unsigned long time;
+  // SW1 piano toggle/ autoplay
+  if(GPIO_PORTF_MIS_R & SW1){
+    GPIO_PORTF_ICR_R = SW1; 
+		//debounce
+		DelayMs(50);
+    GPIO_PORTF_DATA_R &= ~LEDS; 
+    GPIO_PORTF_DATA_R |= BLUE; 
     
-    while(ms){
-        time = 16667;   // ˜ 1ms at 50 MHz
-        while(time){
-            time--;
-        }
-        ms--;
+    if(currentMode == Mode1) currentMode = Mode2;
+    else currentMode = Mode1;
+  }
+
+  // SW2 Octave change / song change
+  if(GPIO_PORTF_MIS_R & SW2){
+    GPIO_PORTF_ICR_R = SW2; 
+    DelayMs(50); // Initial debounce
+
+    if(currentMode == Mode1){
+      if(currentState == Low_Octave) currentState = Middle_Octave;
+      else if(currentState == Middle_Octave) currentState = High_Octave;
+      else currentState = Low_Octave;
     }
+    else {
+      Sound_Stop();
+      currentSong++;
+      songIndex = 0; // Reset index
+      if(currentSong >= SONG_COUNT) currentSong = 0;
+    }
+
+    // WAIT FOR RELEASE: Prevents multiple increments per press
+    while((GPIO_PORTF_DATA_R & SW2) == 0); 
+    DelayMs(50); // Release debounce
+    
+    GPIO_PORTF_DATA_R &= ~LEDS; // Clear LED after release
+  }
 }
 
-void Beep(){
 
 
-	Sound_Start(LOW_A);
-	Delay(300);
-	Sound_Stop();
-	Delay(300);
-	Sound_Start(LOW_B);
-	Delay(300);
-		Sound_Stop();
-	Sound_Start(LOW_G);
-	Delay(300);
-		Sound_Stop();
-	Sound_Stop();
-	Delay(300);
+//play a song array
+void play_a_song(const NTyp scoretab[]){
+    uint16_t i = 0;
 
+    while(scoretab[i].delay){
+
+        if(scoretab[i].tone_index == PAUSE){
+            Sound_Stop();
+        } else {
+            Sound_Start(Tone_Tab[scoretab[i].tone_index]);
+        }
+
+        DelayMs((uint32_t)scoretab[i].delay * UNIT_MS);
+
+        Sound_Stop();
+        DelayMs(10);
+
+        i++;
+    }
+
+    DelayMs(15 * UNIT_MS);   // pause between songs
 }
+
 
 
 

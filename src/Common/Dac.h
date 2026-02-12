@@ -40,6 +40,8 @@
 #define HIGH_A 444
 #define HIGH_B 395
 
+#define PAUSE 255
+
 
 void DAC_Init(void);
 void Sound_Init(void);
